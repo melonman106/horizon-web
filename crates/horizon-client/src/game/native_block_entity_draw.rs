@@ -577,7 +577,7 @@ impl Game<'_> {
 
 /// Helpers for drawing mod block entities, kept as stable as the hook points.
 // Native mods use these; nothing in Horizon does.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "native mod API (docs/native-mods.md)")]
 impl Game<'_> {
     /// Draws a quad with `corners` in blocks under `draw`'s pose, in a model
     /// face's order (top left, bottom left, bottom right, top right as seen

@@ -481,7 +481,7 @@ const CAPE_BYTES: usize = 23 * 17 * 3;
 /// A 64×64 RGBA skin in the plugin's packing.
 pub fn pack_skin(rgba: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(SKIN_BYTES);
-    for p in rgba.chunks_exact(4).take(64 * 64) {
+    for p in rgba.as_chunks::<4>().0.iter().take(64 * 64) {
         out.extend_from_slice(&[p[2], p[1], (p[0] >> 1) | (p[3] & 0x80)]);
     }
     out.resize(SKIN_BYTES, 0);
@@ -491,7 +491,7 @@ pub fn pack_skin(rgba: &[u8]) -> Vec<u8> {
 /// The plugin's packing back as a 64×64 RGBA skin (one bit of alpha).
 pub fn unpack_skin(packed: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(64 * 64 * 4);
-    for p in packed.chunks_exact(3).take(64 * 64) {
+    for p in packed.as_chunks::<3>().0.iter().take(64 * 64) {
         let alpha = if p[2] & 0x80 != 0 { 255 } else { 0 };
         out.extend_from_slice(&[(p[2] & 0x7F) << 1, p[1], p[0], alpha]);
     }
@@ -842,7 +842,7 @@ fn read_pause_icon(r: &mut Reader) -> crate::Result<PauseIcon> {
     }
     let (width, height) = (u32::from(width), u32::from(height));
     let mut rgba = vec![0; (width * height * 4) as usize];
-    for px in rgba.chunks_exact_mut(4) {
+    for px in rgba.as_chunks_mut::<4>().0 {
         let p = u32::from(r.u16()?);
         if p == 0 {
             continue;

@@ -8,6 +8,16 @@
 use horizon_os::time::{Duration, Instant};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 
+/// How long the page's loop sleeps after `about_to_wait`. With a redraw
+/// asked, its animation frame wakes the loop; the deadline only keeps the
+/// loop turning while the tab is hidden and gets no frames. Without one,
+/// nothing may wake the loop, so it looks again in 4 ms.
+#[cfg(target_arch = "wasm32")]
+pub(super) fn web_wait(redraw_asked: bool) -> ControlFlow {
+    let after = if redraw_asked { 100 } else { 4 };
+    ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(after))
+}
+
 /// A successful frame only permits polling until the next idle iteration. If
 /// the compositor stops delivering redraws, the old result must not keep the
 /// loop spinning indefinitely. Offscreen frames are driven by the loop itself.

@@ -21,6 +21,10 @@ sha2 = "0.10"
 # AES-NI at run time on x86 for the connection cipher (crypto/blocks.rs).
 aes = "0.8.4"
 
+# TCP keepalive on the connection's socket; the browser has no TCP socket.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+socket2 = { version = "0.5", features = ["all"] }
+
 # The name servers of Windows' network adapters, for Minecraft SRV redirects.
 [target.'cfg(windows)'.dependencies]
 ipconfig = "0.3.4"

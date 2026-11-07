@@ -141,7 +141,6 @@ impl Levels {
         self.parked.get(&dim).map(|level| &level.world)
     }
 
-    /// The worlds of the levels not in place.
     /// A parked level's world border.
     pub(super) fn parked_border(
         &self,
@@ -150,6 +149,7 @@ impl Levels {
         self.parked.get(&dim).map(|level| &level.border)
     }
 
+    /// The worlds of the levels not in place.
     pub(super) fn parked_worlds(&self) -> impl Iterator<Item = &World> {
         self.parked.values().map(|level| &level.world)
     }
@@ -157,6 +157,11 @@ impl Levels {
     /// The world of the level not in place, in `dim`, to change.
     pub(super) fn parked_world_mut(&mut self, dim: Dim) -> Option<&mut World> {
         self.parked.get_mut(&dim).map(|level| &mut level.world)
+    }
+
+    /// The streaming of the level not in place, in `dim`, to change.
+    pub(super) fn parked_streaming_mut(&mut self, dim: Dim) -> Option<&mut Streaming> {
+        self.parked.get_mut(&dim).map(|level| &mut level.streaming)
     }
 
     /// The level not in place, in `dim`.
@@ -410,6 +415,8 @@ impl Game<'_> {
             if opened {
                 // The new streaming's radius and meshing options.
                 self.apply_settings();
+                // A mod's tickets held for the level while it was closed.
+                self.native_chunk_tickets_opened();
                 self.native_level_opened(target);
             }
         }
@@ -486,12 +493,16 @@ impl Game<'_> {
         let running = (!paused && !self.agent.hold_server).then(|| self.clock.world_runs());
         let server = self.serving.is_some() || self.options.dedicated.is_some();
         // A config edited while the server is paused (empty) still reloads.
+        // The parts outside every level get spans of their own, so that a slow
+        // tick's line and `horizon-report` say when a mod's tick hook took it.
         if server {
+            let _span = horizon_client::spans::guard("mod_configs_poll");
             self.native_configs_poll();
         }
         if let Some(running) = running
             && server
         {
+            let _span = horizon_client::spans::guard("mods_server_tick_start");
             self.native_lifecycle_server_tick_start(running);
         }
         let observe_level =
@@ -568,13 +579,24 @@ impl Game<'_> {
             self.native_lifecycle.cancel_server_tick();
         }
         result?;
-        if let Err(error) = self.close_idle_levels() {
+        let closed = {
+            let _span = horizon_client::spans::guard("close_idle_levels");
+            self.close_idle_levels()
+        };
+        if let Err(error) = closed {
             self.native_lifecycle.cancel_server_tick();
             return Err(error);
         }
         // `ServerTickEnd`: an errored tick or an idle-close failure (at
         // the `?` above) never reaches this site.
-        self.native_lifecycle_server_tick_end(paused);
+        {
+            let _span = horizon_client::spans::guard("mods_server_tick_end");
+            self.native_lifecycle_server_tick_end(paused);
+        }
+        // The packets counted for `native_server_packets` (only while a mod counts them).
+        if server {
+            self.diagnostics_packets_tick();
+        }
         Ok(())
     }
 
@@ -625,6 +647,7 @@ impl Game<'_> {
                 slowest_steps(&notes)
             );
         }
+        self.native_server_tick_timed(wall, cpu, &spans);
         record(wall, cpu, spans, in_tick);
         result
     }
@@ -699,6 +722,8 @@ impl Game<'_> {
                     || self.mod_container_viewers.keys().any(|(k, _)| *k == d.id())
                     || self.player_bed_levels().any(|b| b == *d)
                     || forced
+                    // A native mod's tickets for a level not open yet (`native_force_chunk_in`).
+                    || self.mod_chunk_tickets.get(d).is_some_and(|l| !l.is_empty())
                     // A game test runs in its own level, players or not.
                     || self.game_tests.has_tests_in(*d)
                     || self.pregen_level() == Some(*d)

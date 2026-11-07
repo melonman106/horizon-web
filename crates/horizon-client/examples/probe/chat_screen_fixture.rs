@@ -51,6 +51,7 @@ pub fn main() -> horizon_client::Result<()> {
             &m,
             &c,
             case["initial"].as_str().unwrap_or(""),
+            false,
             history.len(),
             w,
             h,
