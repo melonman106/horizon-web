@@ -2,6 +2,7 @@
 //! as vanilla's `RegionFile` makes them (a file opened with `open_writable`).
 //! Exports never overwrite a file: use a separate directory for offline
 //! edits and copied .mcc data.
+use horizon_os::fs::PathExt;
 use crate::{
     compression::{Compression, invalid},
     nbt::{self, Limits, NamedTag},
@@ -333,10 +334,14 @@ impl RegionFile {
         }
         let compression = Compression::try_from(header[4] & 127)?;
         let compressed = if header[4] & 128 != 0 {
-            if len != 1 {
-                return Err(invalid("external chunk stub has inline data"));
-            }
+            // `createExternalChunkInputStream`: the stub's length says nothing
+            // about the stream in the `.mcc`, so a stub that also claims inline
+            // data only warns; and a stub whose file is gone is a chunk that is
+            // not there (`null`), not a damaged one.
             let path = external_path(self.path.parent().unwrap_or(Path::new(".")), chunk);
+            if !path.fs_is_file() {
+                return Ok(None);
+            }
             let file = File::open(path)?;
             let mut data = Vec::new();
             file.take((MAX_COMPRESSED + 1) as u64)

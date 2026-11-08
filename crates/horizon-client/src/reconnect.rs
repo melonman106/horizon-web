@@ -180,6 +180,10 @@ impl Tracker {
     pub fn address(&self) -> Option<&str> {
         self.address.as_deref()
     }
+    /// That server was found on the local network.
+    pub fn lan(&self) -> bool {
+        self.lan
+    }
     /// A connection to `address` as `name` starts: a new address starts
     /// counting anew.
     pub fn connecting(&mut self, address: &str, name: &str, lan: bool) {

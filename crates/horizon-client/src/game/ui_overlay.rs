@@ -123,6 +123,7 @@ impl Game<'_> {
             q.borrow_mut().push(Action::Connect {
                 address: address.to_owned(),
                 lan: false,
+                realm: false,
             })
         });
         true
