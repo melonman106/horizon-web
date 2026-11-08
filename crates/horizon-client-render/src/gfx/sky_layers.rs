@@ -404,10 +404,13 @@ impl SkyLayers {
 }
 
 /// The cube 200 across around the camera, six faces of two triangles, each face a sixth of the
-/// texture: OptiFine's layout (`CustomSkyLayer.renderSide`), the bottom face from the lower
-/// row's middle. Position then UV.
+/// texture: OptiFine's layout (`CustomSkyLayer.renderSide`), the bottom face from the grid's top
+/// left, the top from its top middle. Position then UV.
 pub fn cube_vertices() -> Vec<[f32; 5]> {
     use std::f32::consts::{FRAC_PI_2, PI};
+    // OptiFine turns every face by Y(-90) X(90) Z(-90) first: the sky's frame, then its own.
+    // Together that's X(90); without it the sky lies on its side.
+    let frame = Mat4::from_rotation_x(FRAC_PI_2);
     let faces = [
         (Mat4::IDENTITY, 4),
         (Mat4::from_rotation_x(FRAC_PI_2), 1),
@@ -429,7 +432,7 @@ pub fn cube_vertices() -> Vec<[f32; 5]> {
         ];
         let vertex = |i: usize| {
             let (p, uv): ([f32; 3], [f32; 2]) = corners[i];
-            let p = pose.transform_point3(Vec3::from_array(p));
+            let p = (frame * pose).transform_point3(Vec3::from_array(p));
             [p.x, p.y, p.z, uv[0], uv[1]]
         };
         out.extend([0, 1, 2, 0, 2, 3].map(vertex));
@@ -453,16 +456,23 @@ mod tests {
             );
             assert!((0.0..=1.0).contains(&v[3]) && (0.0..=1.0).contains(&v[4]));
         }
-        // The bottom face (first) is the lower row's middle, at y = -100.
-        assert!(cube[..6].iter().all(|v| (v[1] + 100.0).abs() < 1.0e-3));
+        // The bottom face (side 0, third) is the grid's top left, at y = -100.
+        let bottom = &cube[12..18];
+        assert!(bottom.iter().all(|v| (v[1] + 100.0).abs() < 1.0e-3));
+        assert!(bottom.iter().all(|v| v[3] <= 1.0 / 3.0 + 1.0e-4 && v[4] <= 0.5));
+        // The top face (side 1, second) is the grid's top middle, at y = 100.
+        let top = &cube[6..12];
+        assert!(top.iter().all(|v| (v[1] - 100.0).abs() < 1.0e-3));
         assert!(
-            cube[..6]
-                .iter()
-                .all(|v| (1.0 / 3.0 - 1.0e-4..=2.0 / 3.0 + 1.0e-4).contains(&v[3]))
+            top.iter()
+                .all(|v| (1.0 / 3.0 - 1.0e-4..=2.0 / 3.0 + 1.0e-4).contains(&v[3]) && v[4] <= 0.5)
         );
-        assert!(cube[..6].iter().all(|v| v[4] >= 0.5));
-        // The top face (rotated by pi about z: side 2) at y = 100.
-        assert!(cube[24..30].iter().all(|v| (v[1] - 100.0).abs() < 1.0e-3));
+        // The rest stand around the horizon.
+        for face in [&cube[..6], &cube[18..24], &cube[24..30], &cube[30..36]] {
+            assert!(face.iter().all(|v| v[1].abs() < 100.0 + 1.0e-3));
+            assert!(face.iter().any(|v| (v[1] + 100.0).abs() < 1.0e-3));
+            assert!(face.iter().any(|v| (v[1] - 100.0).abs() < 1.0e-3));
+        }
     }
 
     #[test]
